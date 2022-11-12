@@ -24,6 +24,7 @@ public class HeapFileIterator extends AbstractDbFileIterator {
 
     @Override
     public void open() throws DbException, TransactionAbortedException {
+        this.nextPageNo = 0;
         this.tupleIterator = this.getNextPageIterator();
     }
 

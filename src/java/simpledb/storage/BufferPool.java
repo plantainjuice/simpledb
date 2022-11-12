@@ -9,6 +9,7 @@ import simpledb.transaction.TransactionId;
 
 import java.io.*;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -80,9 +81,9 @@ public class BufferPool {
      */
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
-        Set<PageId> transactionPages = transactionPageMap.getOrDefault(tid, new HashSet<>());
-        transactionPages.add(pid);
-        transactionPageMap.put(tid, transactionPages);
+        Set<PageId> pids = transactionPageMap.getOrDefault(tid, new HashSet<>());
+        pids.add(pid);
+        transactionPageMap.put(tid, pids);
 
         if (pagePool.containsKey(pid)) {
             Page page = this.pagePool.get(pid);
@@ -160,8 +161,12 @@ public class BufferPool {
      */
     public void insertTuple(TransactionId tid, int tableId, Tuple t)
         throws DbException, IOException, TransactionAbortedException {
-        // some code goes here
-        // not necessary for lab1
+        DbFile file = Database.getCatalog().getDatabaseFile(tableId);
+        List<Page> dirtiedPages = file.insertTuple(tid, t);
+
+        // mark as dirty
+        for (Page dirtiedPage : dirtiedPages)
+            dirtiedPage.markDirty(true, tid);
     }
 
     /**
@@ -179,8 +184,13 @@ public class BufferPool {
      */
     public  void deleteTuple(TransactionId tid, Tuple t)
         throws DbException, IOException, TransactionAbortedException {
-        // some code goes here
-        // not necessary for lab1
+        int tableId = t.getRecordId().getPageId().getTableId();
+        DbFile file = Database.getCatalog().getDatabaseFile(tableId);
+        List<Page> dirtiedPages = file.deleteTuple(tid, t);
+
+        // mark as dirty
+        for (Page dirtiedPage : dirtiedPages)
+            dirtiedPage.markDirty(true, tid);
     }
 
     /**
@@ -189,9 +199,8 @@ public class BufferPool {
      *     break simpledb if running in NO STEAL mode.
      */
     public synchronized void flushAllPages() throws IOException {
-        // some code goes here
-        // not necessary for lab1
-
+        for (var key : this.pagePool.keySet())
+            this.flushPage(key);
     }
 
     /** Remove the specific page id from the buffer pool.
@@ -203,8 +212,7 @@ public class BufferPool {
         are removed from the cache so they can be reused safely
     */
     public synchronized void discardPage(PageId pid) {
-        // some code goes here
-        // not necessary for lab1
+        this.pagePool.remove(pid);
     }
 
     /**
@@ -212,15 +220,25 @@ public class BufferPool {
      * @param pid an ID indicating the page to flush
      */
     private synchronized  void flushPage(PageId pid) throws IOException {
-        // some code goes here
-        // not necessary for lab1
+        Page page = this.pagePool.get(pid);
+
+        if (page != null && page.isDirty() != null) {
+            DbFile tableFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
+            tableFile.writePage(page);
+            page.markDirty(false, null);
+        }
     }
 
     /** Write all pages of the specified transaction to disk.
      */
     public synchronized  void flushPages(TransactionId tid) throws IOException {
-        // some code goes here
-        // not necessary for lab1|lab2
+        Set<PageId> pids = transactionPageMap.get(tid);
+        if (pids == null)
+            return;
+
+        for (PageId pid : pids) {
+            flushPage(pid);
+        }
     }
 
     /**
@@ -228,8 +246,20 @@ public class BufferPool {
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
     private synchronized  void evictPage() throws DbException {
-        // some code goes here
-        // not necessary for lab1
+        // ramdom pick
+        for (Page page : this.pagePool.values()) {
+            if (page.isDirty() != null)
+                continue;
+
+            try {
+                this.flushPage(page.getId());
+            } catch (IOException e) {
+                throw new DbException(e.getMessage());
+            }
+
+            this.pagePool.remove(page.getId());
+            break;
+        }
     }
 
 }

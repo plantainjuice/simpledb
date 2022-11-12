@@ -1,7 +1,15 @@
 package simpledb.execution;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+
 import simpledb.common.Type;
+import simpledb.storage.Field;
+import simpledb.storage.IntField;
 import simpledb.storage.Tuple;
+import simpledb.storage.TupleDesc;
+import simpledb.storage.TupleIterator;
 
 /**
  * Knows how to compute some aggregate over a set of IntFields.
@@ -9,6 +17,12 @@ import simpledb.storage.Tuple;
 public class IntegerAggregator implements Aggregator {
 
     private static final long serialVersionUID = 1L;
+
+    private int gbfield;
+    private Type gbfieldtype;
+    private int afield;
+    private Op what;
+    private HashMap<Field, ArrayList<Integer>> groups;
 
     /**
      * Aggregate constructor
@@ -26,7 +40,11 @@ public class IntegerAggregator implements Aggregator {
      */
 
     public IntegerAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
-        // some code goes here
+        this.gbfield = gbfield;
+        this.gbfieldtype = gbfieldtype;
+        this.afield = afield;
+        this.what = what;
+        this.groups = new HashMap<Field, ArrayList<Integer>>();
     }
 
     /**
@@ -37,7 +55,21 @@ public class IntegerAggregator implements Aggregator {
      *            the Tuple containing an aggregate field and a group-by field
      */
     public void mergeTupleIntoGroup(Tuple tup) {
-        // some code goes here
+        // 1. get gbfield, agfield
+        Field gbf = this.gbfield == NO_GROUPING ? null : tup.getField(this.gbfield);
+        Field agf = tup.getField(this.afield);
+
+        // 2. add to groups
+        ArrayList<Integer> arr = this.groups.get(gbf);
+        if (arr == null) {
+            arr = new ArrayList<Integer>();
+            this.groups.put(gbf, arr);
+        }
+
+        if (agf.getType() == Type.INT_TYPE)
+            arr.add(((IntField)(agf)).getValue());
+        else
+            arr.add(0);
     }
 
     /**
@@ -49,9 +81,62 @@ public class IntegerAggregator implements Aggregator {
      *         the constructor.
      */
     public OpIterator iterator() {
-        // some code goes here
-        throw new
-        UnsupportedOperationException("please implement me for lab2");
+        TupleDesc td;
+        if(this.gbfield == NO_GROUPING)
+            td = new TupleDesc(new Type []{Type.INT_TYPE});
+        else 
+            td = new TupleDesc(new Type []{this.gbfieldtype, Type.INT_TYPE});
+
+        ArrayList<Tuple> tuples = new ArrayList<>();
+        for (Map.Entry<Field, ArrayList<Integer>> entry : this.groups.entrySet()) {
+
+            Field f = entry.getKey();
+            ArrayList<Integer> arr = entry.getValue();
+
+            int val = 0;
+
+            switch (this.what) {
+                case AVG:
+                    for (int i : arr) val += i;
+                    val /= arr.size();
+                    break;
+                case MAX:
+                    int max = Integer.MIN_VALUE;
+                    for (int i : arr)
+                        max = Math.max(max, i);
+                    val = max;
+                    break;
+                case MIN:
+                    int min = Integer.MAX_VALUE;
+                    for (int i : arr)
+                        min = Math.min(min, i);
+                    val = min;
+                    break;
+                case SUM:
+                    for (int i : arr) val += i;
+                    break;
+                case COUNT:
+                    val = arr.size();
+                    break;
+                case SC_AVG:
+                    break;
+                case SUM_COUNT:
+                    break;
+            }
+
+            Tuple tup = new Tuple(td);
+            if(this.gbfield == NO_GROUPING) {
+                tup.setField(0, new IntField(val));
+            }
+            else {
+                tup.setField(0, f);
+                tup.setField(1, new IntField(val));
+            }
+
+            tuples.add(tup);
+        }
+
+        return new TupleIterator(td, tuples);
     }
 
 }

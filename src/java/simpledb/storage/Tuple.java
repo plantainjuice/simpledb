@@ -97,7 +97,7 @@ public class Tuple implements Serializable {
         }
 
         // pop last one \t
-        out.deleteCharAt(out.length());
+        out.deleteCharAt(out.length() - 1);
 
         return out.toString();
     }
@@ -116,6 +116,6 @@ public class Tuple implements Serializable {
      * */
     public void resetTupleDesc(TupleDesc td)
     {
-        // some code goes here
+        this.td = td;
     }
 }
