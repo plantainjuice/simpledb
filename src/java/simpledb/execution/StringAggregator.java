@@ -22,7 +22,7 @@ public class StringAggregator implements Aggregator {
     private Type gbfieldtype;
     private int afield;
     private Op what;
-    private HashMap<Field, ArrayList<Integer>> groups;
+    private HashMap<Field, Integer> groups;
 
     /**
      * Aggregate constructor
@@ -34,13 +34,13 @@ public class StringAggregator implements Aggregator {
      */
 
     public StringAggregator(int gbfield, Type gbfieldtype, int afield, Op what) {
-        if(what != Op.COUNT && what != Op.SUM) throw new IllegalArgumentException();
+        if(what != Op.COUNT) throw new IllegalArgumentException();
 
         this.gbfield = gbfield;
         this.gbfieldtype = gbfieldtype;
         this.afield = afield;
         this.what = what;
-        this.groups = new HashMap<Field, ArrayList<Integer>>();
+        this.groups = new HashMap<Field, Integer>();
     }
 
     /**
@@ -53,16 +53,8 @@ public class StringAggregator implements Aggregator {
         Field agf = tup.getField(this.afield);
 
         // 2. add to groups
-        ArrayList<Integer> arr = this.groups.get(gbf);
-        if (arr == null) {
-            arr = new ArrayList<Integer>();
-            this.groups.put(gbf, arr);
-        }
-
-        if (agf.getType() == Type.INT_TYPE)
-            arr.add(((IntField)(agf)).getValue());
-        else
-            arr.add(0);
+        int v = this.groups.getOrDefault(gbf, 0);
+        this.groups.put(gbf, v + 1);
     }
 
     /**
@@ -81,21 +73,10 @@ public class StringAggregator implements Aggregator {
             td = new TupleDesc(new Type []{this.gbfieldtype, Type.INT_TYPE});
 
         ArrayList<Tuple> tuples = new ArrayList<>();
-        for (Map.Entry<Field, ArrayList<Integer>> entry : this.groups.entrySet()) {
+        for (Map.Entry<Field, Integer> entry : this.groups.entrySet()) {
 
             Field f = entry.getKey();
-            ArrayList<Integer> arr = entry.getValue();
-
-            int val = 0;
-
-            switch (this.what) {
-                case SUM:
-                    for (int i : arr) val += i;
-                    break;
-                case COUNT:
-                    val = arr.size();
-                    break;
-            }
+            int val = entry.getValue();
 
             Tuple tup = new Tuple(td);
             if(this.gbfield == NO_GROUPING) {

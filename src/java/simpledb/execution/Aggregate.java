@@ -48,14 +48,13 @@ public class Aggregate extends Operator {
         if (gfield != Aggregator.NO_GROUPING)
             gbtype = child.getTupleDesc().getFieldType(this.groupField());
 
-        if(gbtype == Type.INT_TYPE) {
-            agg = new IntegerAggregator(gfield, gbtype, afield, aop);
-        } else if (gbtype == Type.STRING_TYPE) {
-            agg = new StringAggregator(gfield, gbtype, afield, aop);
-        } else if(gbtype == null) {
-            agg = new IntegerAggregator(gfield, gbtype, afield, aop);
-        }
+        Type agtype = child.getTupleDesc().getFieldType(this.aggregateField());
 
+        if(agtype == Type.INT_TYPE) {
+            agg = new IntegerAggregator(gfield, gbtype, afield, aop);
+        } else if (agtype == Type.STRING_TYPE) {
+            agg = new StringAggregator(gfield, gbtype, afield, aop);
+        } 
     }
 
     /**

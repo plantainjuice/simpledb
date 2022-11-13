@@ -5,6 +5,11 @@ import simpledb.execution.Predicate;
 /** A class to represent a fixed-width histogram over a single integer-based field.
  */
 public class IntHistogram {
+    private int bucketWidth;
+    private int[] buckets; 
+    private int min; 
+    private int max;
+    private int ntups;
 
     /**
      * Create a new IntHistogram.
@@ -23,7 +28,11 @@ public class IntHistogram {
      * @param max The maximum integer value that will ever be passed to this class for histogramming
      */
     public IntHistogram(int buckets, int min, int max) {
-    	// some code goes here
+        this.buckets = new int[buckets];
+        this.min = min;
+        this.max = max;
+        this.ntups = 0;
+        this.bucketWidth = (int) Math.ceil((max - min + 1) / (buckets * 1.0));
     }
 
     /**
@@ -31,7 +40,8 @@ public class IntHistogram {
      * @param v Value to add to the histogram
      */
     public void addValue(int v) {
-    	// some code goes here
+        this.ntups++;
+        this.buckets[this.bucketIndex(v)]++;
     }
 
     /**
@@ -45,9 +55,70 @@ public class IntHistogram {
      * @return Predicted selectivity of this particular operator and value
      */
     public double estimateSelectivity(Predicate.Op op, int v) {
+        int bucketIndex = bucketIndex(v);
+        double selectivity = 0F;
 
-    	// some code goes here
-        return -1.0;
+        switch (op) {
+            case EQUALS:
+                selectivity = (bucketHeight(bucketIndex) / (this.bucketWidth * 1.0)) / (this.ntups * 1.0);
+                break;
+
+            case NOT_EQUALS:
+                selectivity = (this.ntups - bucketHeight(bucketIndex) / (this.bucketWidth * 1.0)) / (this.ntups * 1.0);
+                break;
+
+            case GREATER_THAN:
+                for (int i = bucketIndex; i < buckets.length; i++) {
+                    double bucketFraction = bucketHeight(i) / (this.ntups * 1.0);
+                    double bucketPartition = 1;
+                    if (i == bucketIndex) {
+                        bucketPartition = (bucketMaxValue(bucketIndex) - v) / (this.bucketWidth * 1.0);
+                    }
+
+                    selectivity += (bucketFraction * bucketPartition);
+                }
+                break;
+
+            case GREATER_THAN_OR_EQ:
+                for (int i = bucketIndex; i < buckets.length; i++) {
+                    double bucketFraction = bucketHeight(i) / (this.ntups * 1.0);
+                    double bucketPartition = 1;
+                    if (i == bucketIndex) {
+                        bucketPartition = (bucketMaxValue(bucketIndex) - v + 1) / (this.bucketWidth * 1.0);
+                    }
+
+                    selectivity += (bucketFraction * bucketPartition);
+                }
+                break;
+
+            case LESS_THAN:
+                for (int i = bucketIndex; i >= 0; i--) {
+                    double bucketFraction = bucketHeight(i) / (this.ntups * 1.0);
+                    double bucketPartition = 1;
+                    if (i == bucketIndex) {
+                        bucketPartition = (v - bucketMinValue(i)) / (this.bucketWidth * 1.0);
+                    }
+
+                    selectivity += (bucketFraction * bucketPartition);
+                }
+                break;
+
+            case LESS_THAN_OR_EQ:
+                for (int i = bucketIndex; i >= 0; i--) {
+                    double bucketFraction = bucketHeight(i) / (this.ntups * 1.0);
+                    double bucketPartition = 1;
+                    if (i == bucketIndex) {
+                        bucketPartition = (v - bucketMinValue(i) + 1) / (this.bucketWidth * 1.0);
+
+                    }
+                    selectivity += (bucketFraction * bucketPartition);
+                }
+                break;
+
+            default:
+        }
+
+        return selectivity;
     }
     
     /**
@@ -68,7 +139,37 @@ public class IntHistogram {
      * @return A string describing this histogram, for debugging purposes
      */
     public String toString() {
-        // some code goes here
-        return null;
+        StringBuilder sb = new StringBuilder();
+
+        for (int i = 0; i < buckets.length; ++i) {
+            sb.append(bucketMinValue(i)).append("-").append(bucketMaxValue(i)).append(": ").append(buckets[i]);
+
+            if (i < buckets.length - 1)
+                sb.append(", ");
+        }
+
+        return sb.toString();
+    }
+
+    private int bucketIndex(int v) {
+        if (v < this.min) {
+            return - 1;
+        } else if (v > this.max) {
+            return buckets.length;
+        } else {
+            return (int) Math.floor((v - this.min) / (this.bucketWidth * 1.0));
+        }
+    }
+
+    private int bucketMinValue(int index) {
+        return this.min + index * this.bucketWidth;
+    }
+
+    private int bucketMaxValue(int index) {
+        return this.min + ((index + 1) * this.bucketWidth) - 1;
+    }
+
+    private int bucketHeight(int index) {
+        return (index >= 0 && index < buckets.length) ? buckets[index] : 0;
     }
 }
