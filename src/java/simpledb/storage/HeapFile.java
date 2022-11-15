@@ -79,12 +79,18 @@ public class HeapFile implements DbFile {
         }
 
         try {
-            // read the existing page from disk
-            RandomAccessFile randomAccessFile = new RandomAccessFile(this.f, "r");
-            randomAccessFile.seek(pageOffset);
-            randomAccessFile.read(data);
-            randomAccessFile.close();
-            return new HeapPage((HeapPageId) pid, data);
+            // add a new blank page to the HeapFile
+            if (pid.getPageNumber() == this.numPages()) {
+                this.numPages++;
+                return new HeapPage((HeapPageId) pid, HeapPage.createEmptyPageData());
+                // read the existing page from disk
+            } else {
+                RandomAccessFile randomAccessFile = new RandomAccessFile(this.f, "r");
+                randomAccessFile.seek(pageOffset);
+                randomAccessFile.read(data);
+                randomAccessFile.close();
+                return new HeapPage((HeapPageId) pid, data);
+            }
         } catch (IOException e) {
             throw new NoSuchElementException();
         }
@@ -138,8 +144,6 @@ public class HeapFile implements DbFile {
         HeapPage newPage = (HeapPage) Database.getBufferPool().getPage(tid, newPageId, Permissions.READ_WRITE);
         newPage.insertTuple(t);
         modifiedPages.add(newPage);
-
-        this.numPages += 1;
 
         return modifiedPages;
     }

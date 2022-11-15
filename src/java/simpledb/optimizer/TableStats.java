@@ -134,9 +134,9 @@ public class TableStats {
         // 1.2 construct histograms
         for (int i = 0; i < tupleDesc.numFields(); ++i) {
             if (tupleDesc.getFieldType(i) == Type.INT_TYPE) {
-                this.intHistograms[i] = new IntHistogram(ioCostPerPage, mins[i], maxs[i]);
+                this.intHistograms[i] = new IntHistogram(NUM_HIST_BINS, mins[i], maxs[i]);
             } else {
-                this.stringHistograms[i] = new StringHistogram(ioCostPerPage);
+                this.stringHistograms[i] = new StringHistogram(NUM_HIST_BINS);
             }
         }
 
