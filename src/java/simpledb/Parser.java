@@ -524,7 +524,6 @@ public class Parser {
                                         + s
                                         + "\n -- parser only handles SQL transactions, insert, delete, and select statements");
                     }
-                    if (query != null)
                         query.execute();
 
                     if (!inUserTrans && curtrans != null) {

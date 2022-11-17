@@ -4,6 +4,7 @@ import simpledb.common.Database;
 import simpledb.common.Permissions;
 import simpledb.common.DbException;
 import simpledb.common.DeadlockException;
+import simpledb.common.LockManager;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
@@ -38,7 +39,7 @@ public class BufferPool {
 
     private int numPages;
     private Map<PageId, Page> pagePool = new ConcurrentHashMap<>();
-    private Map<TransactionId, Set<PageId>> transactionPageMap  = new ConcurrentHashMap<>();
+    private LockManager lockmanager;
 
 
     /**
@@ -48,6 +49,7 @@ public class BufferPool {
      */
     public BufferPool(int numPages) {
         this.numPages = numPages;
+        this.lockmanager = new LockManager();
     }
     
     public static int getPageSize() {
@@ -81,9 +83,7 @@ public class BufferPool {
      */
     public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
-        Set<PageId> pids = transactionPageMap.getOrDefault(tid, new HashSet<>());
-        pids.add(pid);
-        transactionPageMap.put(tid, pids);
+        this.lockmanager.lock(tid, pid, perm);
 
         if (pagePool.containsKey(pid)) {
             Page page = this.pagePool.get(pid);
@@ -111,8 +111,7 @@ public class BufferPool {
      * @param pid the ID of the page to unlock
      */
     public  void unsafeReleasePage(TransactionId tid, PageId pid) {
-        // some code goes here
-        // not necessary for lab1|lab2
+        this.lockmanager.unLock(tid, pid);
     }
 
     /**
@@ -121,15 +120,12 @@ public class BufferPool {
      * @param tid the ID of the transaction requesting the unlock
      */
     public void transactionComplete(TransactionId tid) {
-        // some code goes here
-        // not necessary for lab1|lab2
+        transactionComplete(tid, true);
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
     public boolean holdsLock(TransactionId tid, PageId p) {
-        // some code goes here
-        // not necessary for lab1|lab2
-        return false;
+        return this.lockmanager.hasLock(tid, p);
     }
 
     /**
@@ -138,10 +134,30 @@ public class BufferPool {
      *
      * @param tid the ID of the transaction requesting the unlock
      * @param commit a flag indicating whether we should commit or abort
+     * @throws IOException
      */
     public void transactionComplete(TransactionId tid, boolean commit) {
         // some code goes here
         // not necessary for lab1|lab2
+
+        if(commit) {
+            try {
+                flushPages(tid);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } else {
+            Set<PageId> pids = this.lockmanager.getPids(tid);
+            for (PageId pid : pids) {
+                if (pagePool.get(pid) != null && tid.equals(pagePool.get(pid).isDirty())) {
+                    // revert page
+                    Page restoredPage = Database.getCatalog().getDatabaseFile(pid.getTableId()).readPage(pid);
+                    pagePool.put(pid, restoredPage);
+                }
+            }
+        }
+
+        this.lockmanager.releaseLocksOnTransaction(tid);
     }
 
     /**
@@ -232,9 +248,7 @@ public class BufferPool {
     /** Write all pages of the specified transaction to disk.
      */
     public synchronized  void flushPages(TransactionId tid) throws IOException {
-        Set<PageId> pids = transactionPageMap.get(tid);
-        if (pids == null)
-            return;
+        Set<PageId> pids = this.lockmanager.getPids(tid);
 
         for (PageId pid : pids) {
             flushPage(pid);
@@ -244,8 +258,9 @@ public class BufferPool {
     /**
      * Discards a page from the buffer pool.
      * Flushes the page to disk to ensure dirty pages are updated on disk.
+     * @throws TransactionAbortedException
      */
-    private synchronized  void evictPage() throws DbException {
+    private synchronized  void evictPage() throws DbException{
         // ramdom pick
         for (Page page : this.pagePool.values()) {
             if (page.isDirty() != null)
@@ -259,6 +274,11 @@ public class BufferPool {
 
             this.pagePool.remove(page.getId());
             break;
+        }
+
+        // evict fail
+        if(pagePool.size() >= this.numPages) {
+            throw new DbException("no more memory");
         }
     }
 

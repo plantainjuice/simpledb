@@ -249,7 +249,6 @@ public class JoinOptimizer {
             Map<String, TableStats> stats,
             Map<String, Double> filterSelectivities, boolean explain)
             throws ParsingException {
-
         PlanCache planCache = new PlanCache();
 
         for (int i = 1; i <= joins.size(); i++) {
@@ -274,6 +273,9 @@ public class JoinOptimizer {
         }
 
         List<LogicalJoinNode> optOrder = planCache.getOrder(new HashSet<>(joins));
+
+        if (optOrder == null)
+            optOrder = joins;
 
         if (explain) {
             printJoins(optOrder, planCache, stats, filterSelectivities);
